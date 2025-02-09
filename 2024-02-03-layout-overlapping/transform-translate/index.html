@@ -1,0 +1,53 @@
+<style>
+  /* 컨테이너 (비교를 위해 크기 지정) */
+  .transform-container {
+    width: 300px;
+    height: 200px;
+    margin: 20px;
+    border: 1px dashed #999;
+    background: #f0f0f0;
+    position: relative;
+  }
+  /* 공통 박스 스타일 */
+  .box {
+    width: 80px;
+    height: 80px;
+    line-height: 80px;
+    text-align: center;
+    color: #fff;
+    display: inline-block; 
+    margin: 20px;
+  }
+  /* 첫 번째 박스: 원래 위치 그대로 */
+  .box1 {
+    background: rgba(50, 205, 50, 0.8); /* LimeGreen */
+  }
+  /* 두 번째 박스: transform으로 이동 */
+  .box2 {
+    background: rgba(255, 165, 0, 0.8); /* Orange */
+    transform:
+      translate(-70px, 20px)
+      scaleX(0.3)
+      rotateZ(30deg)
+      ;
+
+    transition: transform 100ms ease-out;
+  }
+  .box2:hover {
+    transform:
+      translate(-70px, 20px);
+
+    transition: transform 500ms ease-out;
+  }
+</style>
+
+<h2>transform: translate 이용</h2>
+<div class="transform-container">
+  <div class="box box1">Box 1</div>
+  <div class="box box2">Box 2</div>
+</div>
+<p>
+  DOM 상 위치는 유지하되,<br />
+  <code>transform: translate</code>로 좌표 이동만 하여 겹칩니다.
+</p>
+

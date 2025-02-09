@@ -1,0 +1,55 @@
+<style>
+  .grid-container {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: repeat(6, 50px);
+    gap: 10px;
+    width: 400px;
+    margin: 20px;
+    border: 1px dashed #999;
+    background: #f0f0f0;
+  }
+
+  /* 공통 박스 스타일 */
+  .box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: bold;
+  }
+
+  .box1 {
+    grid-row: 2 / 3;
+    grid-column: 2 / 6;
+    background: rgba(255, 99, 71, 0.8); /* Tomato */
+    order: 2;
+  }
+
+  .box2 {
+    grid-row: 1 / 7;
+    grid-column: 2 / 4;
+    background: rgba(30, 144, 255, 0.8); /* DodgerBlue */
+    order: 1;
+  }
+
+  .box3 {
+    grid-row: 4 / 6;
+    grid-column: 4 / 6;
+    background: rgba(255, 0, 255, 0.8);  /* Magenta */
+    order: 0;
+  }
+</style>
+
+<h2>grid를 이용해서 겹치기</h2>
+<div class="grid-container">
+  <div class="box box1">Box 1</div>
+  <div class="box box2">Box 2</div>
+  <div class="box box3">Box 3</div>
+</div>
+<p>
+  Box1, Box2, Box3가 부분적으로 서로 겹치는 예시입니다.
+  <br />
+  (row/col 범위 활용)
+</p>
+

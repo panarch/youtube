@@ -1,0 +1,44 @@
+<style>
+  .pos-container {
+    position: relative; /* 자식들의 절대 배치 기준 */
+    width: 300px;
+    height: 200px;
+    border: 1px dashed #999;
+    background: #f0f0f0;
+    margin: 20px;
+  }
+  /* 공통 박스 스타일 */
+  .box {
+    width: 100px;
+    height: 100px;
+    line-height: 100px; /* 텍스트 수직정렬 */
+    text-align: center; /* 텍스트 수평정렬 */
+    color: #fff;
+  }
+  /* 위치 지정 박스 */
+  .box1 {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(255, 99, 71, 0.8); /* Tomato */
+  }
+  .box2 {
+    position: absolute;
+    bottom: 0;
+    right: -100px;
+    background: rgba(30, 144, 255, 0.8); /* DodgerBlue */
+  }
+</style>
+
+<h2>position: absolute 이용</h2>
+<div class="pos-container">
+  <div class="box box1">Box 1</div>
+  <div class="box box2">Box 2</div>
+</div>
+
+<p>
+  부모를 <code>position: relative</code>로 잡고,
+  <br />
+  자식 요소를 <code>top</code>, <code>left</code>로 배치하여 겹칩니다.
+</p>
+
