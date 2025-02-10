@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Alert, Confirm, Prompt Example</title>
+</head>
+<body>
+  <h1>1. window.alert, confirm, prompt</h1>
+  <button onclick="window.alert('안녕하세요!')">Alert</button>
+  <button onclick="handleConfirm()">Confirm</button>
+  <button onclick="handlePrompt()">Prompt</button>
+
+  <script>
+    function handleConfirm() {
+      const result = confirm("확인하시겠습니까?");
+      if (result) {
+        alert("확인 버튼을 누르셨습니다.");
+      } else {
+        alert("취소 버튼을 누르셨습니다.");
+      }
+    }
+
+    function handlePrompt() {
+      const name = prompt("이름을 입력해주세요:");
+      if (name) {
+        alert(`안녕하세요, ${name}님!`);
+      } else {
+        alert("입력이 취소되었습니다.");
+      }
+    }
+  </script>
+</body>
+</html>
+

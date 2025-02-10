@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Dialog Tag Example</title>
+  <style>
+    dialog {
+      padding: 15px;
+      border: none;
+      border-radius: 6px;
+      background: #fff;
+      text-align: center;   /* 내용 중앙 정렬 */
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      width: 300px;
+    }
+
+    /* dialog가 모달로 열렸을 때 뒷배경 스타일 */
+    dialog::backdrop {
+      background: rgba(100, 0, 0, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <h1>dialog 태그 간단 예시</h1>
+
+  <!-- 다이얼로그 열기 버튼 -->
+  <button onclick="openDialog()">Dialog 열기</button>
+
+  <!-- dialog 태그 -->
+  <dialog>
+    <h2>다이얼로그</h2>
+    <p>이곳은 &lt;dialog&gt; 태그를 이용한 모달입니다.</p>
+    <button onclick="closeDialog()">닫기</button>
+  </dialog>
+
+  <script>
+    const myDialog = document.querySelector('dialog');
+    
+    function openDialog() {
+      myDialog.showModal(); // 모달 형태로 다이얼로그 열기
+    }
+
+    function closeDialog() {
+      myDialog.close();     // 다이얼로그 닫기
+    }
+
+    document
+      .querySelector('h1')
+      .addEventListener('click', () => {
+        window.alert('안녕하세요');
+      });
+  </script>
+</body>
+</html>
