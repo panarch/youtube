@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Snake Game</title>
+  <style>
+    :root {
+      --width: 30;
+      --height: 22;
+      --tick-duration: 120;
+      --acc: 3;
+
+      --color-background: #120A8F;
+      --color-background-board: #333333;
+      --color-text: #FF1493;
+      --color-text-score: #FFFF33;
+      --color-border: #FF1493;
+      --color-dialog-border: #9D00FF;
+
+      --color-slot-blank: #1A1A40;
+      --color-slot-snake: #FFD700;
+      --color-slot-apple: #FF3131;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      color: var(--color-text);
+      text-transform: uppercase;
+    }
+
+    .score span {
+      font-size: 36px;
+      color: var(--color-text-score);
+    }
+
+    body {
+      padding-top: 50px;
+      background-color: var(--color-background);
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    button {
+      padding: 10px 20px;
+      background-color: transparent;
+      border: 3px solid var(--color-border);
+      font-size: 16px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .board {
+      width: 400px;
+      height: calc(400px * var(--height) / var(--width));
+      background-color: var(--color-background-board);
+      border: 3px solid var(--color-border);
+
+      display: grid;
+      grid-template-columns: repeat(var(--width), 1fr);
+      grid-template-rows: repeat(var(--height), 1fr);
+      gap: 0px;
+
+      div {
+        background-color: var(--color-slot-blank);
+      }
+
+      div.snake {
+        background-color: var(--color-slot-snake);
+      }
+
+      div.apple {
+        background-color: var(--color-slot-apple);
+      }
+    }
+
+    dialog {
+      margin: auto;
+      padding: 30px;
+      background-color: var(--color-background);
+      border: 3px solid var(--color-dialog-border);
+    }
+
+    dialog:open {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      align-items: center;
+    }
+
+    dialog::backdrop {
+      background-color: rgba(0, 0, 0, 0.7);
+    }
+  </style>
+</head>
+
+<body>
+  <h1>snake game</h1>
+  <h2 class="score">score: <span></span></h2>
+
+  <div class="board">
+  </div>
+
+  <button class="start">start</button>
+
+  <dialog>
+    <h1>game over</h1>
+    <h2 class="score">score: <span></span></h2>
+    <button class="close">close</button>
+  </dialog>
+
+  <script>
+    const Slot = {
+      EMPTY: 'empty',
+      SNAKE: 'snake',
+      APPLE: 'apple',
+    };
+
+    const Direction = {
+      UP: 'up',
+      RIGHT: 'right',
+      DOWN: 'down',
+      LEFT: 'left',
+    };
+
+    // constants
+    const styles = window.getComputedStyle(document.body);
+    const width = styles.getPropertyValue('--width');
+    const height = styles.getPropertyValue('--height');
+    const tickDuration = styles
+      .getPropertyValue('--tick-duration');
+    const acc = styles.getPropertyValue('--acc');
+
+    // elements
+    const $board = document.querySelector('.board');
+    const $score = document.querySelector('body .score span');
+    const $dialog = document.querySelector('dialog');
+    const $dialogScore = $dialog.querySelector('.score span');
+    let $slots = [];
+
+    // variables
+    let lastTick = Date.now();
+    let snake = [[1, 1], [2, 1], [3, 1]];
+    let apple = [6, 4]; // [x, y]
+    let direction = Direction.RIGHT;
+    let nextDirection;
+    let score = 0;
+
+    init();
+
+    function init() {
+      $board.innerHTML = `${Array(width * height)
+        .fill('<div></div>')
+        .join('')
+        }`;
+      $slots = [...$board.querySelectorAll('div')];
+
+      document.body.addEventListener('keydown', (e) => {
+        if (nextDirection) return;
+
+        const key = e.key;
+
+        if (key === 'ArrowUp' && direction !== Direction.DOWN) {
+          nextDirection = Direction.UP;
+        } else if (key === 'ArrowRight' && direction !== Direction.LEFT) {
+          nextDirection = Direction.RIGHT;
+        } else if (key === 'ArrowDown' && direction !== Direction.UP) {
+          nextDirection = Direction.DOWN;
+        } else if (key === 'ArrowLeft' && direction !== Direction.RIGHT) {
+          nextDirection = Direction.LEFT;
+        }
+      });
+
+      $dialog
+        .querySelector('.close')
+        .addEventListener('click', () => {
+          $dialog.close()
+        });
+
+      document
+        .querySelector('.start')
+        .addEventListener('click', start);
+
+      drawSnake();
+    }
+
+    function start() {
+      clear();
+
+      lastTick = Date.now();
+      snake = [[1, 1], [2, 1], [3, 1]];
+      apple = [6, 4]; // [x, y]
+      direction = Direction.RIGHT;
+      score = 0;
+
+      updateScore();
+      drawSnake();
+      drawApple();
+
+      requestAnimationFrame(tick);
+    }
+
+    function tick() {
+      const now = Date.now();
+      if (now - lastTick < tickDuration - score * acc) {
+        requestAnimationFrame(tick);
+        return;
+      } else {
+        lastTick = now;
+      }
+
+      clear();
+
+      if (nextDirection) {
+        direction = nextDirection;
+        nextDirection = null;
+      }
+
+      const nextSnake = calcNextSnake();
+      if (checkGameOver(nextSnake)) {
+        drawSnake();
+        drawApple();
+
+        $dialogScore.textContent = score;
+        $dialog.showModal();
+        return;
+      } else if (checkSnakeEatsApple(nextSnake)) {
+        snake = [snake[0], ...nextSnake];
+        apple = calcNewApple(snake);
+        score++;
+        updateScore();
+      } else {
+        snake = nextSnake;
+      }
+
+      drawSnake();
+      drawApple();
+
+      requestAnimationFrame(tick);
+    }
+
+    function checkSnakeEatsApple(snake) {
+      const [hx, hy] = snake[snake.length - 1];
+      const [ax, ay] = apple;
+
+      return (
+        hx === ax && hy === ay
+      );
+    }
+
+    function checkGameOver(snake) {
+      const [hx, hy] = snake[snake.length - 1];
+
+      const outOfBoard = (
+        hx < 0 || hx >= width ||
+        hy < 0 || hy >= height
+      );
+
+      if (outOfBoard) {
+        return true;
+      }
+
+      const selfEater = snake
+        .slice(0, snake.length - 1)
+        .some(([sx, sy]) => sx === hx && sy === hy);
+
+      if (selfEater) {
+        return true;
+      }
+
+      return false;
+    }
+
+    function calcNextSnake() {
+      let [hx, hy] = snake[snake.length - 1];
+
+      if (direction === Direction.UP) {
+        hy--;
+      } else if (direction === Direction.RIGHT) {
+        hx++;
+      } else if (direction === Direction.DOWN) {
+        hy++;
+      } else if (direction === Direction.LEFT) {
+        hx--;
+      }
+
+      return [
+        ...snake.slice(1),
+        [hx, hy],
+      ];
+    }
+
+    function calcNewApple(snake) {
+      for (let i = 0; i < 1000; i++) {
+        const x = Math.floor(Math.random() * width);
+        const y = Math.floor(Math.random() * height);
+
+        if (snake.some(([sx, sy]) => sx === x && sy === y)) {
+          continue;
+        }
+
+        return [x, y];
+      }
+
+      return [0, 0];
+    }
+
+    function updateScore() {
+      $score.textContent = score;
+    }
+
+    function clear() {
+      for (const [x, y] of snake) {
+        fill(x, y, Slot.EMPTY);
+      }
+
+      fill(...apple, Slot.EMPTY);
+    }
+
+    function drawSnake() {
+      for (const [x, y] of snake) {
+        fill(x, y, Slot.SNAKE);
+      }
+    }
+
+    function drawApple() {
+      fill(...apple, Slot.APPLE);
+    }
+
+    function fill(x, y, slot) {
+      $slots[y * width + x].className = slot;
+    }
+  </script>
+</body>
+
+</html>
