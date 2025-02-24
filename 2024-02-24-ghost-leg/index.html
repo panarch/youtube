@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ghost Leg</title>
+  <style>
+    :root {
+      --num-cols: 5;
+      --num-rows: 20;
+      --board-width: 500;
+      --slot-width: 80;
+      --slot-height: 15;
+      --bridge-multiple: 15;
+      --anim-duration: 100ms;
+    }
+
+    * {
+      padding: 0;
+      margin: 0;
+
+      font-family: monospace;
+      text-transform: uppercase;
+    }
+
+    body {
+      padding-top: 30px;
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    select {
+      width: 45px;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .board {
+      padding: 30px 10px;
+      border: 1px solid #ccc;
+      border-radius: 2px;
+
+      display: grid;
+      grid-template-columns: repeat(var(--num-cols), calc(var(--slot-width) * 1px));
+      grid-template-rows: repeat(var(--num-rows), calc(var(--slot-height) * 1px));
+      justify-items: center;
+      align-items: center;
+    }
+
+    .vertical {
+      grid-row: 1 / calc(var(--num-rows) + 1);
+
+      position: relative;
+      width: 100%;
+      height: 100%;
+
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+
+      .line {
+        width: 4px;
+        height: 100%;
+        background-color: gray;
+        border-radius: 2px;
+      }
+
+      .line.path {
+        width: 6px;
+        background-color: red;
+
+        transform-origin: top center;
+        transform: scaleY(0);
+      }
+
+      .line.path.animate {
+        transform: scaleY(1);
+        transition: transform var(--anim-duration);
+      }
+
+      .choice,
+      .result {
+        position: absolute;
+        width: 100%;
+        left: 0;
+        font-size: 16px;
+        text-align: center;
+      }
+
+      .choice {
+        top: -21px;
+        background-color: transparent;
+        border: none;
+      }
+
+      .choice.active {
+        font-weight: bold;
+        color: red;
+      }
+
+      .result {
+        bottom: -21px;
+      }
+    }
+
+    .bridge {
+      position: relative;
+      width: 50%;
+      height: 4px;
+      background-color: gray;
+      border-radius: 2px;
+
+      .line {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background-color: gray;
+        border-radius: 2px;
+      }
+
+      .line.path {
+        top: -1px;
+        height: 6px;
+        background-color: red;
+
+        transform: scaleX(0);
+      }
+
+      .line.path.animate {
+        transform: scaleX(1);
+        transition: transform var(--anim-duration);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Ghost Leg</h1>
+  <div>
+    <label for="num-choices">number of choices:</label>
+    <select id="num-choices"></select>
+    <button class="redraw">redraw</button>
+  </div>
+  <div class="board"></div>
+
+  <script>
+    const $root = document.querySelector(':root');
+    const styles = window.getComputedStyle($root);
+    const bridgeMultiple = Number(styles.getPropertyValue('--bridge-multiple'));
+    const boardWidth = Number(styles.getPropertyValue('--board-width'));
+    const slotHeight = Number(styles.getPropertyValue('--slot-height'));
+    const numRows = Number(styles.getPropertyValue('--num-rows'));
+    let slotWidth = Number(styles.getPropertyValue('--slot-width'));
+    let numCols = Number(styles.getPropertyValue('--num-cols'));
+
+    // elements
+    const $board = document.querySelector('.board');
+    const $select = document.querySelector('select');
+    const $redraw = document.querySelector('.redraw');
+
+    // variables
+    let bridges = []; // [{ col, row1, row2 }]
+
+    init();
+
+    function init() {
+      $select.innerHTML = `${Array(19)
+        .fill(null)
+        .map((_, i) => (
+          `<option value="${i + 2}">${i + 2}</option>`
+        ))
+        .join('')
+        }
+      `;
+      $select.value = numCols;
+      $select.addEventListener('change', (e) => {
+        setup(Number(e.target.value));
+      });
+
+      $redraw.addEventListener('click',
+        () => setup(numCols)
+      );
+
+      setup(numCols);
+    }
+
+    function setup(n) {
+      bridges = [];
+      slotWidth = boardWidth / n;
+      numCols = n;
+      $root.style.setProperty('--slot-width', slotWidth);
+      $root.style.setProperty('--num-cols', numCols);
+      $board.innerHTML = '';
+
+      for (let col = 1; col <= numCols; col++) {
+        addVertical(col);
+      }
+
+      for (let i = 0; i < numCols * bridgeMultiple; i++) {
+        addRandomBridge();
+      }
+    }
+
+    function clear() {
+      for (const elem of document.querySelectorAll('.path')) {
+        elem.remove();
+      }
+
+      const $choice = $board.querySelector('.active');
+      if ($choice) {
+        $choice.classList.remove('active');
+      }
+    }
+
+    async function show(col) {
+      clear();
+
+      $board
+        .querySelector(`#vertical-${col} .choice`)
+        .classList
+        .add('active');
+
+      addVerticalBeginPath(col);
+      col = await showPath(col);
+      addVerticalEndPath(col);
+    }
+
+    async function showPath(col, row = 1) {
+      const bridge = bridges
+        .filter(b => (
+          b.col === col || b.col + 1 === col
+        ))
+        .filter(b => calcRow(b) > row)
+        .reduce((curr, next) => {
+          const currRow = calcRow(curr);
+          const nextRow = calcRow(next);
+
+          return currRow < nextRow ? curr : next;
+        }, {col, row1: numRows, row2: 123})
+
+      function calcRow(bridge) {
+        if (bridge.col === col) {
+          return bridge.row1;
+        } else {
+          return bridge.row2;
+        }
+      }
+
+      await addVerticalPath(
+        col,
+        row,
+        calcRow(bridge),
+      );
+
+      if (calcRow(bridge) >= numRows) {
+        return col;
+      }
+
+      const ltr = bridge.col === col;
+      await addBridgePath(
+        bridge.col,
+        bridge.row1,
+        bridge.row2,
+        ltr,
+      );
+
+      const nextCol = bridge.col === col ?
+        col + 1 : col - 1;
+      const nextRow = bridge.col === col ?
+        bridge.row2 : bridge.row1;
+
+      return await showPath(nextCol, nextRow);
+    }
+
+    function addVerticalBeginPath(col) {
+      const $vertical = document.createElement('div');
+      $vertical.className = 'vertical';
+      $vertical.style.gridColumn = col;
+      $vertical.style.gridRow = 1;
+      $vertical.innerHTML = `
+        <div class="line path animate"></div>
+      `;
+
+      $board.appendChild($vertical);
+    }
+
+    function addVerticalEndPath(col) {
+      const $vertical = document.createElement('div');
+      $vertical.className = 'vertical';
+      $vertical.style.gridColumn = col;
+      $vertical.style.gridRow = numRows;
+      $vertical.innerHTML = `
+        <div class="line path animate"></div>
+      `;
+
+      $board.appendChild($vertical);
+    }
+
+    function addVerticalPath(col, row1, row2) {
+      const $vertical = document.createElement('div');
+      $vertical.className = 'vertical';
+      $vertical.style.gridColumn = col;
+      $vertical.style.gridRow = `${row1} / ${row2 + 1}`
+      $vertical.style.height =
+        'calc(100% - var(--slot-height) * 1px + 5px)';
+      $vertical.innerHTML = `
+        <div class="line path"></div>
+      `;
+
+      $board.appendChild($vertical);
+
+      return new Promise(resolve => {
+        const $path = $vertical.querySelector('.line.path');
+        $path.addEventListener('transitionend', resolve);
+        $path.offsetHeight; // tick
+        $path.classList.add('animate');
+      });
+    }
+
+    function addVertical(col) {
+      const $vertical = document.createElement('div');
+      $vertical.setAttribute('id', `vertical-${col}`);
+      $vertical.className = 'vertical';
+      $vertical.style.gridColumn = col;
+      $vertical.innerHTML = `
+        <button class="choice">${col}</button>
+        <div class="line"></div>
+        <p class="result">${String.fromCharCode(64 + col)}</p>
+      `;
+
+      $board.appendChild($vertical);
+
+      $vertical
+        .querySelector('.choice')
+        .addEventListener('click', () => show(col));
+    }
+
+    function addRandomBridge() {
+      const col = Math.floor(Math.random() * (numCols - 1)) + 1;
+      const row1 = 2 + Math.floor(Math.random() * (numRows - 2));
+      const offsets = [
+        -4, -3,
+        -2, -2,
+        -1, -1, -1, -1,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        1, 1, 1, 1,
+        2, 2,
+        3, 4,
+      ];
+      const offset = offsets[
+        Math.floor(Math.random() * offsets.length)
+      ];
+
+      let row2 = row1 + offset;
+      row2 = Math.max(2, row2);
+      row2 = Math.min(numRows - 1, row2);
+
+      if (check()) {
+        addBridge(col, row1, row2);
+      }
+
+      function check() {
+        const sameRow1 = bridges.some(b => (
+          b.col === col && b.row1 === row1
+        ));
+        if (sameRow1) return false;
+
+        const sameRow2 = bridges.some(b => (
+          b.col === col && b.row2 === row2
+        ));
+        if (sameRow2) return false;
+
+        const row2MeetsRow1 = bridges.some(b => (
+          b.col - 1 === col && b.row1 === row2
+        ));
+        if (row2MeetsRow1) return false;
+
+        const row1MeetsRow2 = bridges.some(b => (
+          b.col + 1 === col && b.row2 === row1
+        ));
+        if (row1MeetsRow2) return false;
+
+        const cross1 = bridges.some(b => (
+          b.col === col && b.row1 > row1 && b.row2 < row2
+        ));
+        if (cross1) return false;
+
+        const cross2 = bridges.some(b => (
+          b.col === col && b.row1 < row1 && b.row2 > row2
+        ));
+        if (cross2) return false;
+
+        return true;
+      }
+    }
+
+    async function addBridgePath(col, row1, row2, ltr) {
+      await addBridge(col, row1, row2, true, ltr);
+    }
+
+    function addBridge(col, row1, row2, path = false, ltr = true) {
+      bridges.push({col, row1, row2});
+
+      const $bridge = document.createElement('div');
+      $bridge.innerHTML = `
+        <div class="line ${path ? 'path' : ''}"></div>
+      `;
+      $bridge.className = 'bridge';
+      $bridge.style.gridColumn = `${col} / ${col + 2}`;
+      $bridge.style.gridRow = `
+        ${Math.min(row1, row2)} / ${Math.max(row1, row2) + 1}
+      `;
+
+      const height = (row2 - row1) * slotHeight;
+      const angle = Math.atan(height / slotWidth);
+      $bridge.style.transform = `rotateZ(${angle}rad)`;
+
+      const bridgeWidth = slotWidth / Math.cos(angle);
+      $bridge.style.width = `${bridgeWidth}px`;
+
+      $board.appendChild($bridge);
+
+      if (!path) return;
+
+      return new Promise(resolve => {
+        const $path = $bridge.querySelector('.path');
+        $path.offsetHeight; // tick
+        $path.style.transformOrigin =
+          ltr ? 'center left' : 'center right';
+        $path.addEventListener('transitionend', resolve);
+        $path.classList.add('animate');
+      });
+    }
+  </script>
+</body>
+
+</html>
