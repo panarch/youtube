@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sliding Puzzle</title>
+  <style>
+    :root {
+      --board-width: 460px;
+      --board-height: var(--number-mode-height);
+      --num-rows: 2;
+      --num-cols: 3;
+      --tile-width: calc(var(--board-width) / var(--num-cols));
+      --tile-height: calc(var(--board-height) / var(--num-rows));
+      --anim-duration: 100;
+
+      --tile-image: 'url()';
+
+      --number-mode-height: min(460px,
+          calc(var(--board-width) / var(--num-cols) * var(--num-rows)));
+      --image-mode-height: 460px;
+
+      /* colors */
+      --color-text: #333333;
+      --color-board-border-default: #8A8A8A;
+      --color-board-border-solved: #FFD700;
+      --color-board-border-solved-shadow: rgba(255, 215, 0, 0.7);
+      --color-board-bg: #F5F5F5;
+      --color-board-tile-odd-bg: #F06292;
+      --color-board-tile-even-bg: #64B5F6;
+      --color-board-tile-border: #B0B0B0;
+      --color-board-tile-text: #FAFAFA;
+
+      --color-button-solve: #26C6DA;
+      --color-button-shuffle: #FF8A65;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      font-family: monospace;
+      text-transform: uppercase;
+      color: var(--color-text);
+    }
+
+    body {
+      padding-top: 30px;
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    select {
+      padding: 0 3px;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button[disabled],
+    button[disabled]:hover,
+    button[disabled]:active {
+      filter: brightness(0.9);
+      cursor: not-allowed;
+    }
+
+    button:hover {
+      filter: brightness(1.1);
+    }
+
+    button:active {
+      filter: brightness(1.2);
+    }
+
+    button#reset {
+      padding: 2px 3px;
+    }
+
+    button#reset[disabled] {
+      color: gray;
+    }
+
+    button#shuffle,
+    button#solve {
+      border: none;
+      border-radius: 3px;
+      padding: 5px 10px;
+      color: white;
+      font-size: 20px;
+    }
+
+    button#shuffle {
+      background-color: var(--color-button-shuffle);
+    }
+
+    button#solve {
+      background-color: var(--color-button-solve);
+    }
+
+    #board {
+      position: relative;
+      width: var(--board-width);
+      height: var(--board-height);
+      border: 8px solid var(--color-board-border-default);
+      border-radius: 6px;
+      background-color: var(--color-board-bg);
+      transition: border-color 500ms, box-shadow 500ms;
+
+      .tile {
+        position: absolute;
+        width: var(--tile-width);
+        height: var(--tile-height);
+        color: var(--color-board-tile-text);
+        font-weight: bold;
+        font-size: calc(min(var(--tile-width), var(--tile-height)) / 1.7);
+        border: 1px solid var(--color-board-tile-border);
+        box-sizing: border-box;
+        transition:
+          transform calc(var(--anim-duration) * 1ms) ease-in-out;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .tile.odd {
+        background-color: var(--color-board-tile-odd-bg);
+      }
+
+      .tile.even {
+        background-color: var(--color-board-tile-even-bg);
+      }
+    }
+
+    #board.solved {
+      border-color: var(--color-board-border-solved);
+      box-shadow: 0 0 10px 5px var(--color-board-border-solved-shadow);
+    }
+
+    #board.image-mode {
+      .tile {
+        border: none;
+        color: transparent;
+        background: var(--tile-image);
+        background-size: var(--board-width) var(--board-height);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>sliding puzzle</h1>
+  <div>
+    <label for="num-rows">rows</label>
+    <select id="num-rows">
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5">5</option>
+      <option value="6">6</option>
+      <option value="7">7</option>
+      <option value="8">8</option>
+    </select>
+
+    <label for="num-cols">cols</label>
+    <select id="num-cols">
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5">5</option>
+      <option value="6">6</option>
+      <option value="7">7</option>
+      <option value="8">8</option>
+    </select>
+  </div>
+  <div>
+    <button id="shuffle">shuffle</button>
+    <button id="solve">solve</button>
+  </div>
+  <div id="board"></div>
+  <div>
+    <label for="image">image</label>
+    <input id="image" type="file" accept="image/*" />
+    <button id="reset">reset</button>
+  </div>
+
+  <script>
+    const Action = {
+      UP: 'up',
+      RIGHT: 'right',
+      DOWN: 'down',
+      LEFT: 'left',
+    };
+
+    const $root = document.querySelector(':root');
+    const styles = window.getComputedStyle($root);
+    const animDuration = Number(styles.getPropertyValue('--anim-duration'));
+    let numRows = Number(styles.getPropertyValue('--num-rows'));
+    let numCols = Number(styles.getPropertyValue('--num-cols'));
+
+    // elements
+    const $board = document.querySelector('#board');
+    const $selectRows = document.querySelector('select#num-rows');
+    const $selectCols = document.querySelector('select#num-cols');
+    const $buttonShuffle = document.querySelector('button#shuffle');
+    const $buttonSolve = document.querySelector('button#solve');
+    const $buttonReset = document.querySelector('button#reset');
+    const $inputImage = document.querySelector('input#image');
+
+    // variables
+    let $tiles = [];
+    let emptyIdx;
+    let history = []; // [Action]
+    let locked = false;
+
+    init();
+
+    function init() {
+      $selectRows.value = numRows;
+      $selectCols.value = numCols;
+
+      $selectRows.addEventListener('change', e => {
+        setup(Number(e.target.value), numCols);
+      });
+      $selectCols.addEventListener('change', e => {
+        setup(numRows, Number(e.target.value));
+      });
+      $buttonShuffle.addEventListener('click', shuffle);
+      $buttonSolve.addEventListener('click', solve);
+
+      $inputImage.addEventListener('change', uploadImage);
+      $buttonReset.addEventListener('click', resetImage);
+
+      document.addEventListener('keydown', ({key}) => {
+        if (locked) return;
+
+        if (key === 'ArrowUp') {
+          move(Action.UP);
+        } else if (key === 'ArrowRight') {
+          move(Action.RIGHT);
+        } else if (key === 'ArrowDown') {
+          move(Action.DOWN);
+        } else if (key === 'ArrowLeft') {
+          move(Action.LEFT);
+        }
+      });
+
+      setup(numRows, numCols);
+    }
+
+    function setup(r, c) {
+      numRows = r;
+      numCols = c;
+      $root.style.setProperty('--num-rows', numRows);
+      $root.style.setProperty('--num-cols', numCols);
+      $tiles = [];
+      history = [];
+      $board.innerHTML = '';
+
+      for (let i = 0; i < numRows * numCols - 1; i++) {
+        const $tile = document.createElement('div');
+        $tile.classList.add('tile');
+        $tile.classList.add(i % 2 === 0 ? 'even' : 'odd');
+        $tile.textContent = i + 1;
+
+        const {row, col} = calcPos(i);
+        $tile.style.transform = calcTransform({row, col});
+        $tile.style.backgroundPositionX =
+          `calc(var(--tile-width) * ${-col})`;
+        $tile.style.backgroundPositionY =
+          `calc(var(--tile-height) * ${-row})`;
+
+        $tiles.push($tile);
+        $board.appendChild($tile);
+      }
+
+      $tiles.push(null);
+      emptyIdx = numRows * numCols - 1;
+
+      updateSolved();
+    }
+
+    function lock() {
+      locked = true;
+      $selectRows.setAttribute('disabled', '');
+      $selectCols.setAttribute('disabled', '');
+      $buttonShuffle.setAttribute('disabled', '');
+      $buttonSolve.setAttribute('disabled', '');
+      $buttonReset.setAttribute('disabled', '');
+      $inputImage.setAttribute('disabled', '');
+    }
+
+    function unlock() {
+      locked = false;
+      $selectRows.removeAttribute('disabled');
+      $selectCols.removeAttribute('disabled');
+      $buttonShuffle.removeAttribute('disabled');
+      $buttonSolve.removeAttribute('disabled');
+      $buttonReset.removeAttribute('disabled');
+      $inputImage.removeAttribute('disabled');
+    }
+
+    function uploadImage(e) {
+      setup(numRows, numCols);
+
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (e) => {
+        const data = e.target.result;
+
+        const image = new Image();
+        image.src = data;
+        image.onload = () => {
+          const {width, height} = image;
+
+          $root.style.setProperty('--tile-image', `url("${data}")`);
+          $root.style.setProperty(
+            '--board-height', 'var(--image-mode-height)'
+          );
+          $root.style.setProperty(
+            '--image-mode-height',
+            `calc(var(--board-width) / ${width} * ${height})`,
+          );
+
+          if (!$board.classList.contains('image-mode')) {
+            $board.classList.add('image-mode');
+          }
+        };
+      };
+    }
+
+    function resetImage() {
+      $inputImage.value = null;
+
+      if ($board.classList.contains('image-mode')) {
+        $board.classList.remove('image-mode');
+      }
+
+      $root.style.setProperty(
+        '--board-height', 'var(--number-mode-height)'
+      );
+    }
+
+    async function shuffle() {
+      lock();
+
+      const actions = Object.values(Action);
+
+      for (let i = 0; i < numRows * numCols * 10; i++) {
+        const action = actions[
+          Math.floor(Math.random() * actions.length)
+        ];
+        const lastAction = history[history.length - 1];
+
+        if (calcCounterAction(action) === lastAction) {
+          continue;
+        }
+
+        if (move(action)) {
+          await tick();
+        }
+      }
+
+      unlock();
+    }
+
+    async function solve() {
+      lock();
+
+      for (let i = history.length - 1; i >= 0; i--) {
+        const action = calcCounterAction(history[i]);
+
+        move(action);
+        await tick();
+      }
+
+      unlock();
+    }
+
+    function tick() {
+      return new Promise(resolve => {
+        setTimeout(resolve, animDuration);
+      });
+    }
+
+    function move(action) {
+      const empty = calcPos(emptyIdx); // {row, col}
+      const tile = {...empty};
+
+      if (action === Action.UP) {
+        tile.row++;
+      } else if (action === Action.RIGHT) {
+        tile.col--;
+      } else if (action === Action.DOWN) {
+        tile.row--;
+      } else if (action === Action.LEFT) {
+        tile.col++;
+      }
+
+      if (tile.row < 0
+        || tile.row >= numRows
+        || tile.col < 0
+        || tile.col >= numCols
+      ) {
+        return false;
+      }
+
+      const tileIdx = calcIdx(tile);
+      const $tile = $tiles[tileIdx];
+      $tile.style.transform = calcTransform(empty);
+
+      $tiles[emptyIdx] = $tile;
+      $tiles[tileIdx] = null;
+      emptyIdx = tileIdx;
+
+      history.push(action);
+      updateSolved();
+      return true;
+    }
+
+    function updateSolved() {
+      let solved = true;
+
+      for (let i = 0; i < numRows * numCols - 1; i++) {
+        const $tile = $tiles[i];
+        if (Number($tile?.textContent) !== i + 1) {
+          solved = false;
+          break;
+        }
+      }
+
+      const hasSolved = $board.classList.contains('solved');
+
+      if (solved && !hasSolved) {
+        $board.classList.add('solved');
+      } else if (!solved && hasSolved) {
+        $board.classList.remove('solved');
+      }
+
+      if (solved) {
+        history = [];
+      }
+    }
+
+    function calcCounterAction(action) {
+      if (action === Action.UP) {
+        return Action.DOWN;
+      } else if (action === Action.RIGHT) {
+        return Action.LEFT;
+      } else if (action === Action.DOWN) {
+        return Action.UP;
+      } else if (action === Action.LEFT) {
+        return Action.RIGHT;
+      }
+    }
+
+    function calcTransform({row, col}) {
+      return `translate(
+        calc(var(--tile-width) * ${col}),
+        calc(var(--tile-height) * ${row})
+      )`;
+    }
+
+    function calcIdx({row, col}) {
+      return row * numCols + col;
+    }
+
+    function calcPos(i) {
+      const row = Math.floor(i / numCols);
+      const col = i % numCols;
+
+      return {row, col};
+    }
+  </script>
+</body>
+
+</html>
