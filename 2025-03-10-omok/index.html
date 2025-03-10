@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Omok</title>
+  <style>
+    :root {
+      --size: 480px;
+
+      --color-board-bg: #DDBE97;
+      --color-board-line: #444;
+      --color-stone-black: #202020;
+      --color-stone-white: #FAFAFA;
+      --box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      font-family: monospace;
+      text-transform: uppercase;
+    }
+
+    body {
+      padding-top: 20px;
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    #controls {
+      width: var(--size);
+
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+
+      button {
+        padding: 3px 5px;
+        font-size: 16px;
+      }
+
+      span {
+        font-size: 20px;
+      }
+
+      p {
+        flex-grow: 1;
+      }
+    }
+
+    #winner {
+      font-size: 28px;
+    }
+
+    #point33 {
+      font-size: 20px;
+      color: red;
+    }
+
+    #board {
+      padding: 15px;
+      width: var(--size);
+      height: var(--size);
+      border-radius: 3px;
+      background-color: var(--color-board-bg);
+      box-shadow: var(--box-shadow);
+
+      display: grid;
+      grid-template-columns: repeat(15, 1fr);
+      grid-template-rows: repeat(15, 1fr);
+      align-items: center;
+      justify-items: center;
+
+      .vline {
+        grid-row: 1 / 16;
+
+        width: 2px;
+        height: calc(100% - var(--size) / 15 + 1px);
+        background-color: var(--color-board-line);
+      }
+
+      .hline {
+        grid-column: 1 / 16;
+
+        width: calc(100% - var(--size) / 15 + 1px);
+        height: 2px;
+        background-color: var(--color-board-line);
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 4px;
+        background-color: var(--color-board-line);
+      }
+
+      .stone {
+        width: calc(100% - 4px);
+        height: calc(100% - 4px);
+        border-radius: 50%;
+        box-shadow: var(--box-shadow);
+
+        opacity: 0;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: transparent;
+      }
+
+      .stone.black {
+        background-color: var(--color-stone-black);
+      }
+
+      .stone.white {
+        background-color: var(--color-stone-white);
+      }
+
+      .stone.placed {
+        opacity: 1;
+      }
+    }
+
+    #board.playing {
+      .stone:hover:not(.placed) {
+        opacity: 0.6;
+        cursor: pointer;
+      }
+    }
+
+    #board.playing.black {
+      .stone:hover:not(.placed) {
+        background-color: var(--color-stone-black);
+      }
+    }
+
+    #board.playing.white {
+      .stone:hover:not(.placed) {
+        background-color: var(--color-stone-white);
+      }
+    }
+
+    #board.history {
+      .stone.black {
+        color: var(--color-stone-white);
+      }
+
+      .stone.white {
+        color: var(--color-stone-black);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Omok</h1>
+
+  <div id="controls">
+    <p>turn: <span id="turn"></span></p>
+
+    <button id="play">play</button>
+    <button id="history">history</button>
+  </div>
+
+  <div id="board"></div>
+
+  <p id="winner" style="display: none">
+    <span>black</span> wins the game!
+  </p>
+  <p id="point33" style="display: none">
+    you cannot play at the 3-3 point.
+  </p>
+
+  <script>
+    const Color = {
+      BLACK: 'black',
+      WHITE: 'white',
+    };
+
+    const SIZE = 15;
+
+    const $board = document.querySelector('#board');
+    const $labelTurn = document.querySelector('#turn');
+    const $labelWinner = document.querySelector('#winner');
+    const $labelPoint33 = document.querySelector('#point33');
+    const $buttonPlay = document.querySelector('button#play');
+    const $buttonHistory = document.querySelector('button#history');
+    const $stones = Array(SIZE)
+      .fill(null)
+      .map(_ => Array(SIZE));
+
+    let counter = 1;
+    let turn = Color.BLACK;
+    let playing = false;
+
+    init();
+
+    function init() {
+      for (let i = 0; i < SIZE; i++) {
+        const $vline = document.createElement('div');
+        $vline.className = 'vline';
+        $vline.style.gridColumn = i + 1;
+        $board.appendChild($vline);
+
+        const $hline = document.createElement('div');
+        $hline.className = 'hline';
+        $hline.style.gridRow = i + 1;
+        $board.appendChild($hline);
+      }
+
+      for (const [row, col] of [[3, 3], [3, 11], [11, 11], [11, 3]]) {
+        const $dot = document.createElement('div');
+        $dot.className = 'dot';
+        $dot.style.gridRow = row + 1;
+        $dot.style.gridColumn = col + 1;
+        $board.appendChild($dot);
+      }
+
+      for (let row = 0; row < SIZE; row++) {
+        for (let col = 0; col < SIZE; col++) {
+          const $stone = document.createElement('div');
+          $stone.className = 'stone';
+          $stone.style.gridRow = row + 1;
+          $stone.style.gridColumn = col + 1;
+          $stone.addEventListener('click', () => place(row, col));
+          $board.appendChild($stone);
+          $stones[row][col] = $stone;
+        }
+      }
+
+      $buttonPlay.addEventListener('click', play);
+      $buttonHistory.addEventListener('click', () => {
+        $board.classList.toggle('history');
+      });
+
+      document.addEventListener('keydown', ({key}) => {
+        if (key === 'R') {
+          stop();
+          play();
+        } else if (key === 't') {
+          changeTurn(
+            turn === Color.BLACK ? Color.WHITE : Color.BLACK
+          );
+        }
+      });
+    }
+
+    function play() {
+      playing = true;
+      counter = 1;
+
+      changeTurn(Color.BLACK);
+      $board.classList.add('playing');
+      $buttonPlay.setAttribute('disabled', '');
+      $buttonPlay.textContent = 'playing';
+      $labelWinner.style.display = 'none';
+
+      for (const $stone of $board.querySelectorAll('.stone.placed')) {
+        $stone.classList.remove('placed');
+        $stone.classList.remove(Color.BLACK);
+        $stone.classList.remove(Color.WHITE);
+      }
+    }
+
+    function stop() {
+      playing = false;
+
+      $board.classList.remove('playing');
+      $buttonPlay.removeAttribute('disabled');
+      $buttonPlay.textContent = 'play';
+      $labelWinner.style.display = 'block';
+      $labelWinner
+        .querySelector('span')
+        .textContent = turn;
+    }
+
+    function place(row, col) {
+      if (!playing) return;
+
+      const $stone = $stones[row][col];
+      if ($stone.classList.contains('placed')) {
+        return;
+      }
+
+      if (!check4(row, col) && check33(row, col)) {
+        $labelPoint33.style.display = 'block';
+        return;
+      } else {
+        $labelPoint33.style.display = 'none';
+      }
+
+      $stone.classList.add('placed');
+      $stone.classList.add(turn);
+      $stone.textContent = counter++;
+
+      if (checkOmok(row, col)) {
+        stop();
+        return;
+      }
+
+      changeTurn(
+        turn === Color.BLACK ? Color.WHITE : Color.BLACK
+      );
+    }
+
+    function check4(row, col) {
+      putStone(row, col);
+
+      let found = false;
+      const list = [
+        [0, 1], [0, -1], [1, 0], [-1, 0],
+        [1, 1], [-1, -1], [1, -1], [-1, 1],
+      ];
+
+      for (const [dr, dc] of list) {
+        if (check(dr, dc)) {
+          found = true;
+          break;
+        }
+      }
+
+      removeStone(row, col);
+      return found;
+
+      function check(dr, dc) {
+        const empty = findEmpty(row, col, dr, dc);
+        if (!empty) return false;
+
+        putStone(...empty);
+
+        const omok = checkOmok(...empty);
+
+        removeStone(...empty);
+        return omok;
+      }
+    }
+
+    function check3(row, col, dr, dc) {
+      const placed1 = findEmpty(row, col, dr, dc);
+      if (!placed1) return false;
+
+      putStone(...placed1);
+
+      const placed2 = findEmpty(...placed1, dr, dc);
+      if (!placed2) {
+        removeStone(...placed1);
+        return false;
+      }
+
+      putStone(...placed2);
+
+      let omok = checkOmok(...placed2);
+
+      if (omok) {
+        let r = placed2[0] + dr;
+        let c = placed2[1] + dc;
+
+        if (!checkOutOfBoard(r, c)) {
+          const $stone = $stones[r][c];
+
+          if ($stone.classList.contains(turn)) {
+            removeStone(...placed1);
+            removeStone(...placed2);
+            return false;
+          }
+        }
+      }
+
+      const rev = findEmpty(row, col, -dr, -dc);
+      if (!rev) {
+        omok = false;
+      } else if (
+        $stones[rev[0]][rev[1]].classList.contains('placed')
+      ) {
+        omok = false;
+      } else {
+        let r = rev[0] - dr;
+        let c = rev[1] - dc;
+
+        if (!checkOutOfBoard(r, c)) {
+          const $stone = $stones[r][c];
+
+          if ($stone.classList.contains(turn)) {
+            omok = false;
+          }
+        }
+      }
+
+      removeStone(...placed1);
+      removeStone(...placed2);
+      return omok;
+    }
+
+    function check33(row, col) {
+      putStone(row, col);
+
+      let n = 0;
+
+      const list = [
+        [[0, 1], [0, -1]], 
+        [[1, 0], [-1, 0]],
+        [[1, 1], [-1, -1]], 
+        [[1, -1], [-1, 1]],
+      ];
+
+      for (const [d1, d2] of list) {
+        if (check3(row, col, ...d1) || check3(row, col, ...d2)) {
+          n++;
+        }
+
+        if (n >= 2) {
+          break;
+        }
+      }
+
+      removeStone(row, col);
+      return n >= 2;
+    }
+
+    function findEmpty(row, col, dr, dc) {
+      let r = row + dr;
+      let c = col + dc;
+
+      while (true) {
+        if (checkOutOfBoard(r, c)) {
+          return null;
+        }
+
+        const $stone = $stones[r][c];
+
+        if (!$stone.classList.contains('placed')) {
+          return [r, c];
+        } else if ($stone.classList.contains(turn)) {
+          r += dr;
+          c += dc;
+        } else {
+          return null;
+        }
+      }
+    }
+
+    function putStone(row, col) {
+      const $stone = $stones[row][col];
+      $stone.classList.add('placed');
+      $stone.classList.add(turn);
+    }
+
+    function removeStone(row, col) {
+      const $stone = $stones[row][col];
+      $stone.classList.remove('placed');
+      $stone.classList.remove(turn);
+    }
+
+    function checkOmok(row, col) {
+      return (
+        count(0, 1) + count(0, -1) === 4 ||
+        count(1, 0) + count(-1, 0) === 4 ||
+        count(1, 1) + count(-1, -1) === 4 ||
+        count(1, -1) + count(-1, 1) === 4
+      );
+
+      function count(dr, dc) {
+        let n = 0;
+        let r = row + dr;
+        let c = col + dc;
+
+        while (true) {
+          if (checkOutOfBoard(r, c)) {
+            return n;
+          }
+
+          const $stone = $stones[r][c];
+          if ($stone.classList.contains(turn)) {
+            n++;
+
+            r += dr;
+            c += dc;
+            continue;
+          }
+
+          break;
+        }
+
+        return n;
+      }
+    }
+
+    function checkOutOfBoard(row, col) {
+      return row < 0 || row >= SIZE || col < 0 || col >= SIZE;
+    }
+
+    function changeTurn(color) {
+      turn = color;
+
+      $board.classList.remove(Color.BLACK);
+      $board.classList.remove(Color.WHITE);
+      $board.classList.add(turn);
+      $labelTurn.textContent = turn;
+    }
+  </script>
+</body>
+
+</html>
