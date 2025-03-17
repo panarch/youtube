@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Apple Game</title>
+  <style>
+    :root {
+      --num-rows: 10;
+      --num-cols: 16;
+      --duration: 120;
+      /* seconds */
+      --board-width: 500px;
+      --apple-size: calc(500px / var(--num-cols));
+
+      --color-text: #533;
+      --color-bg: #F4F1ED;
+      --color-apple-bg-selected: #057BEB;
+      --color-apple-icon: #E21B1B;
+      --color-apple-icon-selected: #F3E047;
+      --color-board-border: #d49c42;
+      --color-board-bg: #F3E047;
+      --color-progress-bg: var(--color-text);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      font-family: monospace;
+      color: var(--color-text);
+    }
+
+    body {
+      padding-top: 15px;
+      background-color: var(--color-bg);
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+    }
+
+    #controls {
+      width: var(--board-width);
+
+      display: flex;
+      align-items: center;
+      gap: 20px;
+
+      #score {
+        flex-shrink: 0;
+
+        position: relative;
+        width: 60px;
+        height: 60px;
+        transform: translateY(-6px);
+
+        path {
+          fill: var(--color-apple-icon);
+        }
+
+        span {
+          position: absolute;
+          top: 6px;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          color: white;
+          font-weight: bold;
+          font-size: 25px;
+
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+      }
+
+      #progress {
+        flex-shrink: 1;
+
+        width: 100%;
+        height: 24px;
+        background-color: var(--color-progress-bg);
+        border: 8px solid var(--color-board-border);
+        border-radius: 12px;
+        overflow: hidden;
+
+        div {
+          width: 100%;
+          height: 100%;
+          background-color: var(--color-board-bg);
+        }
+
+        div.playing {
+          transform: scaleX(0);
+          transform-origin: top left;
+          transition: transform calc(var(--duration) * 1s) linear;
+        }
+      }
+
+      #start {
+        flex-shrink: 0;
+
+        padding: 10px 15px;
+        background-color: var(--color-progress-bg);
+        border: none;
+        border-radius: 12px;
+        color: white;
+        font-size: 20px;
+        cursor: pointer;
+      }
+    }
+
+    #board {
+      position: relative;
+
+      padding: 15px;
+      border: 8px solid var(--color-board-border);
+      border-radius: 12px;
+      background-color: var(--color-board-bg);
+
+      display: grid;
+      grid-template-rows: repeat(var(--num-rows), var(--apple-size));
+      grid-template-columns: repeat(var(--num-cols), var(--apple-size));
+
+      * {
+        user-select: none;
+      }
+
+      .apple {
+        position: relative;
+
+        svg {
+          margin: 2px;
+          width: calc(100% - 4px);
+          height: calc(100% - 4px);
+        }
+
+        path {
+          fill: var(--color-apple-icon);
+        }
+
+        span {
+          position: absolute;
+          z-index: 1;
+
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          color: white;
+          font-size: calc(var(--apple-size) / 2);
+          font-weight: bold;
+          transform: translateY(10%);
+
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+      }
+
+      .apple.selected {
+        background-color: var(--color-apple-bg-selected);
+
+        path {
+          fill: var(--color-apple-icon-selected);
+        }
+
+        span {
+          color: var(--color-text);
+        }
+      }
+
+      .apple.collected {
+        svg {
+          opacity: 0;
+          transform: scale(2);
+
+          transition: opacity 300ms, transform 300ms;
+        }
+
+        span {
+          opacity: 0;
+
+          transition: opacity 300ms;
+        }
+      }
+
+      #final-score {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+
+        font-size: 200px;
+        font-weight: bold;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    }
+
+    #board:not(.playing) {
+      .apple {
+        opacity: 0.7;
+
+        span {
+          opacity: 0;
+        }
+      }
+
+      #final-score {
+        z-index: 2;
+
+        opacity: 1;
+        transform: scale(1);
+        transition: opacity 350ms, transform 350ms;
+      }
+    }
+
+    #board.playing {
+      .apple:hover {
+        cursor: crosshair;
+      }
+
+      #final-score {
+        opacity: 0;
+        transform: scale(0);
+        z-index: -1;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>apple game</h1>
+
+  <div id="controls">
+    <div id="score">
+      <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" xml:space="preserve">
+        <path style="fill:#6B6B6B;"
+          d="M110.291,16.528c0,0,105.156-28.254,133.495,65.21C243.785,81.738,170.185,125.652,110.291,16.528z" />
+        <path
+          d="M238.343,169.456c-1.457-3.58-34.538-88.393,45.793-169.456l22.745,22.534c-65.016,65.614-39.904,132.172-38.809,134.969	L238.343,169.456z" />
+        <path
+          d="M360.196,109.621c-55.927,2.03-87.668,36.526-104.171,36.526s-48.244-34.496-104.171-36.526	C95.928,107.591,0.021,149.728,0.021,279.254S104.209,512,157.549,512s71.915-15.163,98.451-15.163S301.085,512,354.451,512	s157.528-103.227,157.528-232.746S416.123,107.591,360.196,109.621z" />
+      </svg>
+      <span></span>
+    </div>
+
+    <div id="progress">
+      <div></div>
+    </div>
+
+    <button id="start">start</button>
+  </div>
+
+  <div id="board">
+    <h2 id="final-score"></h2>
+  </div>
+
+  <!--
+    COLLECTION: Education 32
+    LICENSE: CC0 License
+    UPLOADER: SVG Repo
+
+    ref. https://www.svgrepo.com/svg/293328/apple
+  -->
+  <svg id="apple-icon" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" xml:space="preserve">
+    <path style="fill:#6B6B6B;"
+      d="M110.291,16.528c0,0,105.156-28.254,133.495,65.21C243.785,81.738,170.185,125.652,110.291,16.528z" />
+    <path
+      d="M238.343,169.456c-1.457-3.58-34.538-88.393,45.793-169.456l22.745,22.534c-65.016,65.614-39.904,132.172-38.809,134.969	L238.343,169.456z" />
+    <path
+      d="M360.196,109.621c-55.927,2.03-87.668,36.526-104.171,36.526s-48.244-34.496-104.171-36.526	C95.928,107.591,0.021,149.728,0.021,279.254S104.209,512,157.549,512s71.915-15.163,98.451-15.163S301.085,512,354.451,512	s157.528-103.227,157.528-232.746S416.123,107.591,360.196,109.621z" />
+  </svg>
+
+  <script>
+    // constants
+    const $root = document.querySelector(':root');
+    const styles = window.getComputedStyle($root);
+    const numRows = styles.getPropertyValue('--num-rows');
+    const numCols = styles.getPropertyValue('--num-cols');
+    const duration = styles.getPropertyValue('--duration');
+
+    // elements
+    const $board = document.querySelector('#board');
+    const $score = document.querySelector('#score span');
+    const $finalScore = document.querySelector('#final-score');
+    const $start = document.querySelector('#start');
+    const $progress = document.querySelector('#progress div');
+    const $appleIcon = document.querySelector('#apple-icon');
+    const $apples = [];
+
+    // variables
+    let playing = false;
+    let dragging = false;
+    let pos1 = null; // [row, col]
+    let pos2 = null; // [row, col]
+    let score = 0;
+    let timerId = null;
+
+    init();
+
+    function init() {
+      for (let row = 0; row < numRows; row++) {
+        for (let col = 0; col < numCols; col++) {
+          const $apple = document.createElement('div');
+          $apple.className = 'apple';
+
+          const $icon = document.importNode($appleIcon, true);
+          $icon.removeAttribute('id');
+
+          const $number = document.createElement('span');
+
+          $apple.addEventListener(
+            'mousedown', (e) => dragBegin(e, row, col)
+          );
+          $apple.addEventListener(
+            'mousemove', (e) => dragMove(e, row, col)
+          );
+          $apple.addEventListener('mouseup', (e) => dragEnd(e));
+
+          $apple.appendChild($icon);
+          $apple.appendChild($number);
+          $board.appendChild($apple);
+
+          $apples.push($apple);
+        }
+      }
+
+      $appleIcon.remove();
+
+      document.addEventListener('mousemove', (e) => dragEnd(e));
+      $start.addEventListener('click', start);
+    }
+
+    function start() {
+      playing = true;
+      score = 0;
+
+      $score.textContent = 0;
+      $board.classList.add('playing');
+      $start.textContent = 'reset';
+
+      $progress.classList.remove('playing');
+      $progress.offsetHeight;
+      $progress.classList.add('playing');
+
+      if (timerId) {
+        clearTimeout(timerId);
+      }
+
+      timerId = setTimeout(end, duration * 1000);
+
+      for (const $apple of $board.querySelectorAll('.collected')) {
+        $apple.classList.remove('collected');
+      }
+
+      for (const $apple of $apples) {
+        $apple
+          .querySelector('span')
+          .textContent = Math.floor(Math.random() * 9) + 1;
+      }
+    }
+
+    function end() {
+      dragEnd();
+
+      playing = false;
+
+      $board.classList.remove('playing');
+      $start.textContent = 'start';
+      $finalScore.textContent = score;
+      beep(true);
+    }
+
+    function dragBegin(e, row, col) {
+      e.stopPropagation();
+
+      if (!playing) return;
+
+      dragging = true;
+
+      pos1 = [row, col];
+      pos2 = [row, col];
+
+      drawSelection();
+    }
+
+    function dragMove(e, row, col) {
+      e.stopPropagation();
+
+      if (!playing || !dragging) return;
+
+      pos2 = [row, col];
+
+      drawSelection();
+    }
+
+    function dragEnd(e) {
+      if (e) {
+        e.stopPropagation();
+      }
+
+      if (!playing) return;
+
+      dragging = false;
+
+      collect();
+      clearSelection();
+    }
+
+    function collect() {
+      let sum = 0;
+
+      const $selectedApples = (
+        $board.querySelectorAll('.apple.selected:not(.collected)')
+      );
+
+      for (const $apple of $selectedApples) {
+        sum += Number($apple.textContent);
+      }
+
+      if (sum !== 10) return;
+
+      for (const $apple of $selectedApples) {
+        $apple.classList.add('collected');
+      }
+
+      score += $selectedApples.length;
+      $score.textContent = score;
+
+      beep();
+    }
+
+    function clearSelection() {
+      for (const $apple of $board.querySelectorAll('.apple.selected')) {
+        $apple.classList.remove('selected');
+      }
+    }
+
+    function drawSelection() {
+      clearSelection();
+
+      const minRow = Math.min(pos1[0], pos2[0]);
+      const maxRow = Math.max(pos1[0], pos2[0]);
+      const minCol = Math.min(pos1[1], pos2[1]);
+      const maxCol = Math.max(pos1[1], pos2[1]);
+
+      for (let row = minRow; row <= maxRow; row++) {
+        for (let col = minCol; col <= maxCol; col++) {
+          const $apple = $apples[row * numCols + col];
+
+          $apple.classList.add('selected');
+        }
+      }
+    }
+
+    function beep(long = false) {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      osc.frequency.value = 400;
+      osc.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + long ? 1 : 0.1);
+    }
+  </script>
+</body>
+
+</html>
