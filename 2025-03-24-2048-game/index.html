@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>2048 Game</title>
+  <style>
+    :root {
+      --goal: 2048;
+      --num-rows: 4;
+      --num-cols: 4;
+      --board-width: 500px;
+      --card-size: calc(var(--board-width) / var(--num-cols));
+      --duration: 120;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      font-family: monospace;
+      text-transform: uppercase;
+      color: #333;
+    }
+
+    body {
+      padding-top: 20px;
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    #controls {
+      width: var(--board-width);
+
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+
+      p {
+        font-size: 20px;
+
+        span {
+          font-weight: medium;
+          font-size: 24px;
+        }
+      }
+
+      button {
+        padding: 10px 15px;
+        border: none;
+        background-color: #433;
+        border-radius: 12px;
+        box-shadow: 1px 1px 15px #433a;
+        font-size: 20px;
+        color: white;
+        cursor: pointer;
+      }
+    }
+
+    #board {
+      padding: 10px;
+      background-color: #433;
+      border-radius: 16px;
+      box-shadow: 1px 1px 15px #433a;
+
+      display: grid;
+      grid-template-columns: repeat(var(--num-cols), var(--card-size));
+      grid-template-rows: repeat(var(--num-rows), var(--card-size));
+      align-items: center;
+      justify-items: center;
+
+      .card {
+        --row: 1;
+        --col: 1;
+        --scale: 0.7;
+        --chars: 2;
+
+        --x: calc(var(--col) * var(--card-size));
+        --y: calc(var(--row) * var(--card-size));
+
+        grid-row: 1;
+        grid-column: 1;
+        width: calc(100% - 8px);
+        height: calc(100% - 8px);
+        border-radius: 12px;
+        box-shadow: 0 0 8px #fffa;
+        color: white;
+        font-weight: bold;
+        font-size: calc(var(--card-size) / max(3, var(--chars)));
+
+        transform: translate(var(--x), var(--y)) scale(var(--scale));
+        transition:
+          transform calc(var(--duration) * 1ms),
+          opacity calc(var(--duration) * 0.4ms) calc(var(--duration) * 0.6ms);
+        ;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    }
+
+    #gameover, #complete {
+      font-size: 60px;
+
+      animation-name: swing;
+      animation-iteration-count: infinite;
+      animation-duration: 1.5s;
+
+      display: none;
+    }
+
+    #gameover {
+      color: #d33;
+    }
+
+    #complete {
+      color: #393;
+    }
+
+    @keyframes swing {
+
+      0%,
+      40%,
+      100% {
+        transform: scale(1);
+      }
+
+      5%,
+      15%,
+      25%,
+      35% {
+        transform: translateX(-3px) scale(1.2);
+      }
+
+      10%,
+      20%,
+      30% {
+        transform: translateX(3px) scale(1.2);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1 id="title">2048 game</h1>
+  <div id="controls">
+    <p>score: <span id="score"></span></p>
+    <button id="start">start</button>
+  </div>
+  <div id="board">
+  </div>
+  <h2 id="gameover">game over</h2>
+  <h2 id="complete">you win!</h2>
+
+  <script>
+    const Action = {
+      UP: 'up',
+      RIGHT: 'right',
+      DOWN: 'down',
+      LEFT: 'left',
+    };
+
+    const $root = document.querySelector(':root');
+    const styles = window.getComputedStyle($root);
+    const duration = Number(styles.getPropertyValue('--duration'));
+    const numRows = Number(styles.getPropertyValue('--num-rows'));
+    const numCols = Number(styles.getPropertyValue('--num-cols'));
+    const goal = Number(styles.getPropertyValue('--goal'));
+
+    document.querySelector('#title').textContent = `${goal} game`;
+
+    const $board = document.querySelector('#board');
+    const $score = document.querySelector('#score');
+    const $start = document.querySelector('#start');
+    const $gameover = document.querySelector('#gameover');
+    const $complete = document.querySelector('#complete');
+    const $cards = Array(numRows)
+      .fill(null)
+      .map(_ => Array(numCols).fill(null));
+
+    let moving = false;
+    let counter = 0;
+
+    init();
+
+    async function init() {
+      document.addEventListener('keydown', async ({key}) => {
+        if (moving) return;
+
+        moving = true;
+        counter++;
+
+        let action;
+
+        if (key === 'ArrowUp') {
+          action = Action.UP;
+        } else if (key === 'ArrowRight') {
+          action = Action.RIGHT;
+        } else if (key === 'ArrowDown') {
+          action = Action.DOWN;
+        } else if (key === 'ArrowLeft') {
+          action = Action.LEFT;
+        }
+
+        const moved = await move(action);
+        if (moved) {
+          await spawnCard();
+        }
+
+        const gameover = !(
+          await move(Action.UP, true) ||
+          await move(Action.RIGHT, true) ||
+          await move(Action.DOWN, true) ||
+          await move(Action.LEFT, true)
+        );
+
+        const complete = $cards
+          .flat()
+          .filter($card => $card !== null)
+          .some($card => Number($card.textContent) >= goal);
+
+        if (complete) {
+          $complete.style.display = 'block';
+        } else if (gameover) {
+          $gameover.style.display = 'block';
+        } 
+
+        if (complete || gameover) {
+          $start.textContent = 'start';
+        } else {
+          moving = false;
+        }
+      });
+
+      $start.addEventListener('click', async () => {
+        moving = false;
+        $score.textContent = 0;
+        $board.innerHTML = '';
+        $start.textContent = 'reset';
+        $gameover.style.display = 'none';
+        $complete.style.display = 'none';
+
+        for (let row = 0; row < numRows; row++) {
+          for (let col = 0; col < numCols; col++) {
+            $cards[row][col] = null;
+          }
+        }
+
+        await spawnCard();
+        await spawnCard();
+      });
+    }
+
+    async function move(action, mock = false) {
+      let moved = false;
+
+      if (action === Action.UP) {
+        for (let col = 0; col < numCols; col++) {
+          for (let row = 0; row < numRows; row++) {
+            moved = handleCard([row, col], [-1, 0]) || moved;
+            if (mock && moved) return true;
+          }
+        }
+      } else if (action === Action.RIGHT) {
+        for (let row = 0; row < numRows; row++) {
+          for (let col = numCols - 1; col >= 0; col--) {
+            moved = handleCard([row, col], [0, 1]) || moved;
+            if (mock && moved) return true;
+          }
+        }
+      } else if (action === Action.DOWN) {
+        for (let col = 0; col < numCols; col++) {
+          for (let row = numRows - 1; row >= 0; row--) {
+            moved = handleCard([row, col], [1, 0]) || moved;
+            if (mock && moved) return true;
+          }
+        }
+      } else if (action === Action.LEFT) {
+        for (let row = 0; row < numRows; row++) {
+          for (let col = 0; col < numCols; col++) {
+            moved = handleCard([row, col], [0, -1]) || moved;
+            if (mock && moved) return true;
+          }
+        }
+      }
+
+      if (!mock) {
+        await tick();
+      }
+
+      return moved;
+
+      function handleCard([row, col], [dr, dc]) {
+        const $card = $cards[row][col];
+        if (!$card) return false;
+
+        let r = row;
+        let c = col;
+        let empty = null; // [row, col]
+
+        while (true) {
+          r += dr;
+          c += dc;
+
+          if (r < 0 || r >= numRows || c < 0 || c >= numCols) {
+            break;
+          }
+
+          const $curr = $cards[r][c];
+
+          if (!$curr) {
+            empty = [r, c];
+          } else if (
+            $curr.style.getPropertyValue('--counter') < counter &&
+            $curr.textContent === $card.textContent
+          ) {
+            if (mock) return true;
+
+            const n = Number($curr.textContent) * 2;
+
+            mergeCard([row, col], [r, c]);
+            mergeCard([r, c], [r, c]);
+            addCard([r, c], n);
+            $score.textContent = Number($score.textContent) + n;
+
+            return true;
+          } else {
+            break;
+          }
+        }
+
+        if (empty) {
+          if (mock) return true;
+
+          moveCard([row, col], empty);
+
+          return true;
+        }
+
+        return false;
+      }
+    }
+
+    async function mergeCard(from, to) {
+      const [r1, c1] = from;
+      const [r2, c2] = to;
+
+      const $card = $cards[r1][c1];
+      $cards[r1][c1] = null;
+      $card.style.setProperty('--row', r2);
+      $card.style.setProperty('--col', c2);
+      $card.style.setProperty('--scale', 0.75);
+      $card.style.opacity = 0;
+
+      await tick();
+
+      $card.remove();
+    }
+
+    async function moveCard(from, to) {
+      const [r1, c1] = from;
+      const [r2, c2] = to;
+
+      const $card = $cards[r1][c1];
+      $cards[r1][c1] = null;
+      $cards[r2][c2] = $card;
+      $card.style.setProperty('--row', r2);
+      $card.style.setProperty('--col', c2);
+
+      await tick();
+    }
+
+    async function addCard([row, col], n) {
+      const $card = document.createElement('div');
+      $card.className = 'card';
+      $card.textContent = n;
+      $card.style.setProperty('--row', row);
+      $card.style.setProperty('--col', col);
+      $card.style.setProperty(
+        '--chars',
+        Math.floor(Math.log10(n))
+      );
+      $card.style.setProperty('--counter', counter);
+
+      const v = Math.log2(n);
+      const hue = (v * 33) % 360;
+      const saturation = 70;
+      const lightness = Math.max(20, 50 - v * 1.5);
+
+      $card.style.backgroundColor = (
+        `hsl(${hue}, ${saturation}%, ${lightness}%)`
+      );
+
+      $board.appendChild($card);
+      $cards[row][col] = $card;
+
+      $card.offsetHeight;
+      $card.style.setProperty('--scale', 1);
+
+      await tick();
+    }
+
+    async function spawnCard() {
+      const n = Math.random() < 0.9 ? 2 : 4;
+
+      const slots = $cards
+        .flat()
+        .map(($card, i) => {
+          if ($card) return null;
+
+          const row = Math.floor(i / numCols);
+          const col = i % numCols;
+          return [row, col];
+        })
+        .filter(v => v !== null);
+
+      const slot = slots[Math.floor(Math.random() * slots.length)];
+      await addCard(slot, n);
+    }
+
+    function tick() {
+      return new Promise(resolve => {
+        setTimeout(resolve, duration);
+      });
+    }
+  </script>
+</body>
+
+</html>
