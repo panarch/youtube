@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tetris</title>
+  <style>
+    :root {
+      --num-cols: 10;
+      --num-rows: 20;
+      --cell-size: 25px;
+      --tick-duration: 800;
+      --game-duration: 120000;
+
+      --color-border: hsl(0, 0%, 15%);
+      --color-bg: hsl(0, 0%, 25%)
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      font-family: monospace;
+    }
+
+    body {
+      padding-top: 15px;
+
+      display: grid;
+      grid-template-areas:
+        ". title    .     ."
+        ". progress start ."
+        ". board    score ."
+        ". board    queue .";
+      grid-template-columns: 1fr repeat(2, max-content) 1fr;
+      grid-template-rows: repeat(2, max-content) 1fr max-content;
+      grid-gap: 15px;
+    }
+
+    #title {
+      grid-area: title;
+    }
+
+    #progress {
+      grid-area: progress;
+      align-self: center;
+
+      width: calc(var(--num-cols) * var(--cell-size));
+      height: 20px;
+
+      border: 6px solid var(--color-border);
+      border-radius: 8px;
+      background-color: var(--color-bg);
+      overflow: hidden;
+
+      >div {
+        width: 100%;
+        height: 100%;
+        background-color: hsl(50, 80%, 50%);
+        transform-origin: top left;
+      }
+    }
+
+    #start {
+      grid-area: start;
+      justify-self: center;
+
+      padding: 8px 15px;
+      font-size: 20px;
+      background-color: var(--color-bg);
+      color: white;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+    }
+
+    #score {
+      grid-area: score;
+      justify-self: center;
+      text-align: center;
+
+      >h2 {
+        color: hsl(300, 70%, 50%);
+        font-size: 60px;
+      }
+
+      >h2.gameover {
+        min-width: 80px;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 5px 15px white;
+        transition: transform 500ms;
+        transform: translate(-226px, 120px) scale(2.5);
+      }
+    }
+
+    #board {
+      grid-area: board;
+
+      border: 6px solid var(--color-border);
+      border-radius: 8px;
+      background-color: var(--color-border);
+
+      display: grid;
+      grid-template-columns: repeat(var(--num-cols), var(--cell-size));
+      grid-template-rows: repeat(var(--num-rows), var(--cell-size));
+
+      .cell {
+        --row: 1;
+        --col: 1;
+
+        grid-row: calc(var(--row) + 1);
+        grid-column: calc(var(--col) + 1);
+
+        background-color: hsl(0, 0%,
+            calc(20% + 10% * mod(var(--row) + var(--col), 2)));
+
+        animation-duration: 200ms;
+      }
+
+      .ghost {
+        animation-name: blink;
+        animation-duration: 500ms;
+        animation-iteration-count: infinite;
+      }
+    }
+
+    #queue {
+      grid-area: queue;
+
+      position: relative;
+
+      border: 6px solid var(--color-border);
+      border-radius: 8px;
+      background-color: var(--color-bg);
+
+      display: grid;
+      grid-template-columns: repeat(6, var(--cell-size));
+      grid-template-rows: repeat(16, var(--cell-size));
+
+      .I {
+        transform: translateY(calc(var(--cell-size) / 2));
+      }
+
+      .J,
+      .L,
+      .S,
+      .Z,
+      .T {
+        transform: translateX(calc(var(--cell-size) / 2));
+      }
+    }
+
+    #queue::before {
+      position: absolute;
+
+      top: 10px;
+      left: 10px;
+      content: 'next';
+      color: white;
+    }
+
+
+    #board,
+    #queue {
+      .I {
+        background-color: hsl(0, 80%, 50%);
+      }
+
+      .J {
+        background-color: hsl(45, 80%, 50%);
+      }
+
+      .L {
+        background-color: hsl(90, 80%, 50%);
+      }
+
+      .S {
+        background-color: hsl(135, 80%, 50%);
+      }
+
+      .Z {
+        background-color: hsl(180, 80%, 50%);
+      }
+
+      .O {
+        background-color: hsl(225, 80%, 50%);
+      }
+
+      .T {
+        background-color: hsl(270, 80%, 50%);
+      }
+    }
+
+    @keyframes removal {
+      50% {
+        transform: scaleX(1.6);
+        background-color: white;
+      }
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        background-color: white;
+      }
+
+      50% {
+        background-color: gray;
+      }
+
+    }
+  </style>
+</head>
+
+<body>
+  <h1 id="title">tetris</h1>
+  <div id="progress">
+    <div></div>
+  </div>
+  <button id="start">start</button>
+  <div id="board"></div>
+  <div id="queue"></div>
+
+  <div id="score">
+    <h3>score</h3>
+    <h2>.</h2>
+  </div>
+
+  <script>
+    const Blocks = ['I', 'J', 'L', 'S', 'Z', 'O', 'T'];
+    const Shape = {
+      I: [
+        [0, 0, 0, 0],
+        [1, 1, 1, 1],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+      ],
+      J: [
+        [0, 0, 0, 0],
+        [1, 0, 0, 0],
+        [1, 1, 1, 0],
+        [0, 0, 0, 0],
+      ],
+      L: [
+        [0, 0, 0, 0],
+        [0, 0, 1, 0],
+        [1, 1, 1, 0],
+        [0, 0, 0, 0],
+      ],
+      S: [
+        [0, 0, 0, 0],
+        [0, 1, 1, 0],
+        [1, 1, 0, 0],
+        [0, 0, 0, 0],
+      ],
+      Z: [
+        [0, 0, 0, 0],
+        [1, 1, 0, 0],
+        [0, 1, 1, 0],
+        [0, 0, 0, 0],
+      ],
+      O: [
+        [0, 0, 0, 0],
+        [0, 1, 1, 0],
+        [0, 1, 1, 0],
+        [0, 0, 0, 0],
+      ],
+      T: [
+        [0, 0, 0, 0],
+        [0, 1, 0, 0],
+        [1, 1, 1, 0],
+        [0, 0, 0, 0],
+      ],
+    };
+
+    const $root = document.querySelector(':root');
+    const styles = window.getComputedStyle($root);
+    const numRows = Number(styles.getPropertyValue('--num-rows'));
+    const numCols = Number(styles.getPropertyValue('--num-cols'));
+    const tickDuration = Number(styles.getPropertyValue('--tick-duration'));
+    const gameDuration = Number(styles.getPropertyValue('--game-duration'));
+
+    const $board = document.querySelector('#board');
+    const $start = document.querySelector('#start');
+    const $score = document.querySelector('#score h2');
+    const $progress = document.querySelector('#progress div');
+    const $queue = document.querySelector('#queue');
+    const $cells = Array(numRows)
+      .fill(null).map(_ => Array(numCols).fill(null));
+
+    /*
+    let block = {
+      name: 'O',
+      shape: Shape.O,
+      pos: [-1, 3], // [row, col]
+    };
+    */
+
+    let queue = [];
+    let block;
+    let lastTick = Date.now();
+    let startTime = Date.now();
+    let playing = false;
+
+    init();
+
+    function init() {
+      for (let row = 0; row < numRows; row++) {
+        for (let col = 0; col < numCols; col++) {
+          const $cell = document.createElement('div');
+          $cell.className = 'cell';
+          $cell.style.setProperty('--row', row);
+          $cell.style.setProperty('--col', col);
+
+          $board.appendChild($cell);
+          $cells[row][col] = $cell;
+        }
+      }
+
+      document.addEventListener('keydown', ({key}) => {
+        if (!playing) return;
+
+        if (key === 'ArrowLeft') {
+          move('left');
+        } else if (key === 'ArrowRight') {
+          move('right');
+        } else if (key === 'ArrowDown') {
+          move('down');
+        } else if (key === 'ArrowUp') {
+          rotate();
+        } else if (key === ' ') {
+          drop();
+        }
+      });
+
+      $start.addEventListener('click', start);
+    }
+
+    function start() {
+      $start.blur();
+      $start.textContent = 'reset';
+      $score.textContent = 0;
+      $score.classList.remove('gameover');
+      $progress.style.transform = 'scaleX(1)';
+
+      for (const $cell of $board.querySelectorAll('.cell')) {
+        $cell.className = 'cell';
+      }
+
+      lastTick = Date.now();
+      startTime = Date.now();
+      playing = true;
+      queue = [];
+      spawnBlock();
+      spawnBlock();
+      spawnBlock();
+      spawnBlock();
+      block = queue.shift();
+      drawBlock(block);
+      drawQueue();
+      requestAnimationFrame(tick);
+    }
+
+    function gameover() {
+      playing = false;
+      $start.textContent = 'start';
+      $score.classList.add('gameover');
+    }
+
+    function tick() {
+      if (!playing) return;
+
+      const now = Date.now();
+
+      const spanDuration = now - startTime;
+      const rate = 1 - (spanDuration / gameDuration);
+      $progress.style.transform = `scaleX(${Math.max(0, rate)})`;
+
+      if (spanDuration >= gameDuration) {
+        gameover();
+        return;
+      }
+
+      if (now - lastTick < tickDuration) {
+        requestAnimationFrame(tick);
+        return;
+      }
+
+      lastTick = now;
+      const nextPos = [...block.pos];
+      nextPos[0]++;
+
+      if (!canBlockMove(nextPos)) {
+        placeBlock();
+        removeFullLines();
+      } else {
+        block.pos = nextPos;
+      }
+
+      drawBlock(block);
+
+      if (!canBlockMove(block.pos)) {
+        gameover();
+        return;
+      }
+
+      requestAnimationFrame(tick);
+    }
+
+    function rotate() {
+      const {shape, pos, name} = block;
+      const rotated = Array(4).fill(null).map(_ => Array(4).fill(0));
+
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          if (shape[r][c] === 0) continue;
+
+          rotated[c][3 - r] = shape[r][c];
+        }
+      }
+
+      const offsets = name === 'I' ? [0, -1, 1, -2, 2] : [0, -1, 1];
+
+      for (const or of offsets) {
+        for (const oc of offsets) {
+          const nextPos = [
+            pos[0] + or,
+            pos[1] + oc,
+          ];
+
+          if (canBlockMove(nextPos, rotated)) {
+            block.shape = rotated;
+            block.pos = nextPos;
+            drawBlock(block);
+            return;
+          }
+        }
+      }
+    }
+
+    function drop() {
+      const nextPos = [...block.pos];
+      nextPos[0]++;
+
+      while (canBlockMove(nextPos)) {
+        nextPos[0]++;
+      }
+
+      nextPos[0]--;
+      block.pos = nextPos;
+
+      drawBlock(block);
+
+      lastTick -= tickDuration;
+    }
+
+    function move(action) {
+      const nextPos = [...block.pos];
+
+      if (action === 'left') {
+        nextPos[1]--;
+      } else if (action === 'right') {
+        nextPos[1]++;
+      } else if (action === 'down') {
+        nextPos[0]++;
+      }
+
+      if (!canBlockMove(nextPos)) {
+        return;
+      }
+
+      block.pos = nextPos;
+      drawBlock(block);
+    }
+
+    function removeFullLines() {
+      const emptyRows = [];
+      let n = 0;
+
+      for (let row = numRows - 1; row >= 0; row--) {
+        const isFull = $cells[row].every(
+          $cell => $cell.classList.contains('placed')
+        );
+
+        if (isFull) {
+          n++;
+          clearRow(row, true);
+          emptyRows.push(row);
+        } else if (
+          $cells[row].every($cell => !$cell.classList.contains('placed'))
+        ) {
+          break;
+        } else if (emptyRows.length > 0) {
+          const emptyRow = emptyRows.shift();
+
+          for (let c = 0; c < numCols; c++) {
+            $cells[emptyRow][c].className = $cells[row][c].className;
+          }
+
+          clearRow(row);
+          emptyRows.push(row);
+        }
+      }
+
+      $score.textContent = Number($score.textContent) + n;
+
+      function clearRow(row, anim = false) {
+        for (const $cell of $cells[row]) {
+          $cell.className = 'cell';
+          if (anim) {
+            $cell.style.animationName = 'removal';
+
+            setTimeout(() => {
+              $cell.style.animationName = '';
+            }, 200);
+          }
+        }
+      }
+    }
+
+    function canBlockMove(pos, shape = block.shape) {
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          if (shape[r][c] === 0) continue;
+
+          const row = r + pos[0];
+          const col = c + pos[1];
+
+          const $cell = $cells[row]?.[col];
+          if (!$cell || $cell.classList.contains('placed')) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    }
+
+    function placeBlock() {
+      for (const $cell of $board.querySelectorAll('.block')) {
+        $cell.classList.remove('block');
+        $cell.classList.add('placed');
+      }
+
+      spawnBlock();
+      block = queue.shift();
+      drawQueue();
+    }
+
+    function spawnBlock() {
+      const name = Blocks[Math.floor(Math.random() * Blocks.length)];
+      const shape = Shape[name];
+      const pos = [-1, 3];
+
+      queue.push({name, shape, pos});
+    }
+
+    function drawBlock({name, shape, pos}) {
+      for (const $cell of $board.querySelectorAll('.block')) {
+        $cell.className = 'cell';
+      }
+
+      for (const $cell of $board.querySelectorAll('.ghost')) {
+        $cell.classList.remove('ghost');
+        $cell.offsetHeight;
+      }
+
+      let ghostRow = pos[0];
+      while (canBlockMove([ghostRow, pos[1]])) {
+        ghostRow++;
+      }
+
+      ghostRow--;
+
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          if (shape[r][c] === 0) continue;
+
+          const row = r + pos[0];
+          const col = c + pos[1];
+
+          // draw ghost block
+          if (ghostRow - pos[0] > 2) {
+            const $cell = $cells[r + ghostRow][col];
+            $cell.classList.add('ghost');
+          }
+
+          const $cell = $cells[row]?.[col];
+          if (!$cell) continue;
+
+          $cell.classList.add('block');
+          $cell.classList.add(name);
+        }
+      }
+    }
+
+    function drawQueue() {
+      $queue.innerHTML = '';
+
+      queue.forEach(({pos, shape, name}, i) => {
+        for (let r = 0; r < 4; r++) {
+          for (let c = 0; c < 4; c++) {
+            if (shape[r][c] === 0) continue;
+
+            const $cell = document.createElement('div');
+            $cell.className = name;
+            $cell.style.gridRow = r + 2 + i * 5;
+            $cell.style.gridColumn = c + 2;
+
+            $queue.appendChild($cell);
+          }
+        }
+      });
+    }
+  </script>
+</body>
+
+</html>
